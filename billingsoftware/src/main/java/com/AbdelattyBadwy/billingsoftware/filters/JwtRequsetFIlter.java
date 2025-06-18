@@ -7,6 +7,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpResponseException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -44,6 +46,10 @@ public class JwtRequsetFIlter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authenticationToken);
             }
         }
-        filterChain.doFilter(request,response);
+        try {
+            filterChain.doFilter(request, response);
+        } catch (Exception e) {
+            throw new HttpResponseException(HttpStatus.SC_BAD_REQUEST,e.getMessage());
+        }
     }
 }
