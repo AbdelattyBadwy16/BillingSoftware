@@ -8,5 +8,6 @@ import java.util.Optional;
 
 public interface ItemRepository extends JpaRepository<Item,Long> {
     Optional<Item> findByItemId(String id);
+    List<Item> findByCategory_CategoryId(String CategoryId);
     Integer countByCategoryId(Long id);
 }

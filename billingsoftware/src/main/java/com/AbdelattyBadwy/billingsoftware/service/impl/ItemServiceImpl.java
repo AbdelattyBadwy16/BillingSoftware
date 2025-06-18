@@ -67,6 +67,14 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
+    public List<ItemResponse> getByCategoryId(String categoryId)  {
+        return itemRepository.findByCategory_CategoryId(categoryId)
+                .stream()
+                .map(Item->convertToResponse(Item))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public void deleteItem(String id) {
         Item item = itemRepository.findByItemId(id)
                 .orElseThrow(()-> new RuntimeException("Item not found"));

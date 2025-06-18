@@ -34,6 +34,11 @@ public class ItemController {
         return itemService.fetchItem();
     }
 
+    @GetMapping("/items/{id}")
+    public List<ItemResponse> getItemsByCategories(@PathVariable String id){
+        return itemService.getByCategoryId(id);
+    }
+
 
     @DeleteMapping("/admin/items/{id}")
     public void removeItem(@PathVariable String id){
