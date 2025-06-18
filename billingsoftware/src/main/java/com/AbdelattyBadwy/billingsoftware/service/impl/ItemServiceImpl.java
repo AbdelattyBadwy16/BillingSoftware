@@ -70,5 +70,6 @@ public class ItemServiceImpl implements ItemService {
     public void deleteItem(String id) {
         Item item = itemRepository.findByItemId(id)
                 .orElseThrow(()-> new RuntimeException("Item not found"));
+        itemRepository.delete(item);
     }
 }

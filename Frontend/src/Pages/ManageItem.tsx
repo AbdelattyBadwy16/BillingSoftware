@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-// TypeScript interfaces
 interface ItemFormData {
   name: string;
   category: string;
   price: string;
   description: string;
+  imageFile?: File;
 }
 
 const ItemManagementDashboard: React.FC = () => {
@@ -13,148 +13,160 @@ const ItemManagementDashboard: React.FC = () => {
     name: '',
     category: '',
     price: '₹200.00',
-    description: ''
+    description: '',
   });
-
+  const [categorys, setAllCategory] = useState([]);
+  const [items, setItems] = useState<ItemFormData[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [isToggleOn, setIsToggleOn] = useState<boolean>(false);
+  const token = localStorage.getItem("authToken");
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/v1.0/categories', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        let data = await response.json();
+        setAllCategory(data);
+      } catch (error) {
+        console.error('Error:', error);
+        alert(`Error submitting category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/v1.0/items', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        let data = await response.json();
+        setItems(data);
+
+      } catch (error) {
+        console.error('Error:', error);
+        alert(`Error submitting category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
-  const handleSave = () => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFormData((prev) => ({
+        ...prev,
+        imageFile: e.target.files![0],
+      }));
+    }
+  };
+
+  const handleSave = async () => {
     if (!formData.name.trim()) {
       alert('Please enter an item name');
       return;
     }
-    console.log('Form Data:', formData);
-    alert('Item saved successfully!');
+
+    const formDataToSend = new FormData();
+
+    const itemRequest = {
+      name: formData.name,
+      categoryId: formData.category,
+      price: formData.price.replace(/[^\d.]/g, ''),
+      description: formData.description,
+    };
+
+    formDataToSend.append('item', JSON.stringify(itemRequest));
+    if (formData.imageFile) {
+      formDataToSend.append('file', formData.imageFile);
+    }
+
+    try {
+      const response = await fetch('http://localhost:8080/api/v1.0/admin/items', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formDataToSend,
+      });
+
+      window.location.reload();
+
+    } catch (error) {
+      console.error(error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
-  const handleSearch = () => {
-    console.log('Search term:', searchTerm);
+  const handleDelete = async (id : any) => {
+    if(!id)return;
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1.0/admin/items/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      alert(`Error deleting item: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   return (
-    <div style={styles.dashboard}>
+    <div style={{ height: '100vh', padding: '2rem', fontFamily: 'sans-serif', backgroundColor: '#1a1a1a', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', height: '70vh', gap: '3rem', justifyContent: 'center', alignItems: 'center' }}>
+        {/* Form */}
+        <div style={{ width: '45%', background: '#2d2d2d', padding: '2rem', borderRadius: '12px', overflowY: 'auto' }}>
+          <h2>Add Item</h2>
+          <input name="name" placeholder="Item Name" value={formData.name} onChange={handleInputChange} style={inputStyle} />
+          <select name="category" value={formData.category} onChange={handleInputChange} style={inputStyle}>
+            <option value="">--SELECT CATEGORY--</option>
+            {
+              categorys.map((cat: any) => <option key={cat.categoryId} value={cat.categoryId}>{cat.name}</option>)
+            }
+          </select>
+          <input name="price" placeholder="Price" value={formData.price} onChange={handleInputChange} style={inputStyle} />
+          <textarea name="description" placeholder="Description" value={formData.description} onChange={handleInputChange} style={{ ...inputStyle, height: '100px' }} />
+          <input type="file" accept="image/*" onChange={handleImageChange} style={{ marginBottom: '1.25rem' }} />
+          <button onClick={handleSave} style={buttonStyle}>Save</button>
+        </div>
 
-      {/* Main Content */}
-      <div style={styles.mainContent}>
-        <div style={styles.contentContainer}>
-          {/* Form Section */}
-          <div style={styles.formSection}>
-            <div style={styles.formCard}>
-              <div style={styles.formHeader}>
-                <div style={styles.uploadIcon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 16L12 8M12 8L9 11M12 8L15 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
+        {/* Item List */}
+        <div style={{ width: '45%', background: '#2d2d2d', padding: '2rem', borderRadius: '12px', overflowY: 'auto', maxHeight: '70vh' }}>
+          <h2>Items</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            {items.map((item: any, index) => (
+              <div key={index} style={{ background: '#3a3a3a', padding: '1rem', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <img src={item.imgUrl} alt={item.name} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '6px', marginBottom: '0.75rem' }} />
+                <h4 style={{ color: '#FFA726', margin: '0.5rem 0' }}>{item.name}</h4>
+                <p style={{ margin: '0.25rem 0', fontSize: '14px' }}>Price: {item.price}</p>
+                <p style={{ margin: '0.25rem 0 0.75rem 0', fontSize: '13px', textAlign: 'center' }}>{item.description}</p>
+                <button onClick={() => handleDelete(item.itemId)} style={{ ...buttonStyle, background: '#e53935', width: '100%', fontSize: '14px' }}>Delete</button>
               </div>
-
-              <div style={styles.itemForm}>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="Item Name"
-                    style={styles.formInput}
-                  />
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Category</label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    style={styles.formSelect}
-                  >
-                    <option value="">--SELECT CATEGORY--</option>
-                    <option value="electronics">Electronics</option>
-                    <option value="clothing">Clothing</option>
-                    <option value="books">Books</option>
-                    <option value="home">Home & Garden</option>
-                  </select>
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Price</label>
-                  <input
-                    type="text"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    style={styles.formInput}
-                  />
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Description</label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="Write content here.."
-                    rows={6}
-                    style={styles.formTextarea}
-                  />
-                </div>
-
-                <button onClick={handleSave} style={styles.saveButton}>
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Search Section */}
-          <div style={styles.searchSection}>
-            <div style={styles.searchForm}>
-              <div style={styles.searchContainer}>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by keyword"
-                  style={styles.searchInput}
-                />
-                <button onClick={handleSearch} style={styles.searchButton}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M21 21L16.514 16.506M19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            
-            <div style={styles.toggleContainer}>
-              <div style={styles.toggleSwitch}>
-                <input 
-                  type="checkbox" 
-                  checked={isToggleOn}
-                  onChange={(e) => setIsToggleOn(e.target.checked)}
-                  style={styles.toggleInput} 
-                />
-                <label style={{
-                  ...styles.toggleLabel,
-                  backgroundColor: isToggleOn ? '#4CAF50' : '#404040'
-                }}>
-                  <span style={{
-                    ...styles.toggleSlider,
-                    transform: isToggleOn ? 'translateX(26px)' : 'translateX(0)'
-                  }}></span>
-                </label>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -162,274 +174,26 @@ const ItemManagementDashboard: React.FC = () => {
   );
 };
 
-// Styles object (this would normally be in a separate CSS file)
-const styles: { [key: string]: React.CSSProperties } = {
-  dashboard: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif',
-    backgroundColor: '#1a1a1a',
-    color: '#ffffff',
-  },
-  
-  navbar: {
-    backgroundColor: '#2d2d2d',
-    padding: '0 2rem',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: '60px',
-    borderBottom: '1px solid #404040',
-  },
-  
-  navBrand: {
-    display: 'flex',
-    alignItems: 'center',
-  },
-  
-  logo: {
-    width: '32px',
-    height: '32px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  logoIcon: {
-    width: '24px',
-    height: '24px',
-    background: 'linear-gradient(135deg, #4CAF50, #8BC34A)',
-    borderRadius: '4px',
-    position: 'relative',
-  },
-  
-  navLinks: {
-    display: 'flex',
-    gap: '2rem',
-    alignItems: 'center',
-  },
-  
-  navLink: {
-    textDecoration: 'none',
-    color: '#b0b0b0',
-    fontSize: '14px',
-    fontWeight: '500',
-    padding: '0.5rem 0',
-    transition: 'color 0.3s ease',
-  },
-  
-  activeLink: {
-    color: '#FFA726',
-    fontWeight: '600',
-  },
-  
-  navProfile: {
-    display: 'flex',
-    alignItems: 'center',
-  },
-  
-  profileAvatar: {
-    width: '32px',
-    height: '32px',
-    background: 'linear-gradient(135deg, #6B73FF, #9575CD)',
-    borderRadius: '50%',
-    cursor: 'pointer',
-  },
-  
-  mainContent: {
-    flex: 1,
-    padding: '2rem',
-    backgroundColor: '#1a1a1a',
-  },
-  
-  contentContainer: {
-    display: 'grid',
-    gridTemplateColumns: '1fr auto',
-    gap: '2rem',
-    maxWidth: '1400px',
-    margin: '0 auto',
-  },
-  
-  formSection: {
-    width: '100%',
-    maxWidth: '600px',
-  },
-  
-  formCard: {
-    backgroundColor: '#2d2d2d',
-    borderRadius: '12px',
-    padding: '2rem',
-    border: '1px solid #404040',
-  },
-  
-  formHeader: {
-    display: 'flex',
-    justifyContent: 'center',
-    marginBottom: '2rem',
-  },
-  
-  uploadIcon: {
-    width: '80px',
-    height: '80px',
-    background: 'linear-gradient(135deg, #4CAF50, #8BC34A)',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'white',
-    cursor: 'pointer',
-    transition: 'transform 0.3s ease',
-  },
-  
-  itemForm: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.5rem',
-  },
-  
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-  },
-  
-  formLabel: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#ffffff',
-  },
-  
-  formInput: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
-    outline: 'none',
-  },
-  
-  formSelect: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    cursor: 'pointer',
-    outline: 'none',
-  },
-  
-  formTextarea: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    resize: 'vertical',
-    minHeight: '120px',
-    outline: 'none',
-  },
-  
-  saveButton: {
-    background: 'linear-gradient(135deg, #FFA726, #FF9800)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '0.875rem 2rem',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    marginTop: '1rem',
-  },
-  
-  searchSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2rem',
-    alignItems: 'flex-end',
-    minWidth: '300px',
-  },
-  
-  searchForm: {
-    width: '100%',
-  },
-  
-  searchContainer: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  
-  searchInput: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 3rem 0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    width: '100%',
-    outline: 'none',
-  },
-  
-  searchButton: {
-    position: 'absolute',
-    right: '8px',
-    background: 'linear-gradient(135deg, #FFA726, #FF9800)',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '0.5rem',
-    color: 'white',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.3s ease',
-  },
-  
-  toggleContainer: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-  },
-  
-  toggleSwitch: {
-    position: 'relative',
-    display: 'inline-block',
-    width: '60px',
-    height: '34px',
-  },
-  
-  toggleInput: {
-    opacity: 0,
-    width: 0,
-    height: 0,
-  },
-  
-  toggleLabel: {
-    position: 'absolute',
-    cursor: 'pointer',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: '34px',
-    transition: '0.4s',
-  },
-  
-  toggleSlider: {
-    position: 'absolute',
-    height: '26px',
-    width: '26px',
-    left: '4px',
-    bottom: '4px',
-    backgroundColor: 'white',
-    borderRadius: '50%',
-    transition: '0.4s',
-  },
+const inputStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '0.75rem 1rem',
+  marginBottom: '1.25rem',
+  borderRadius: '8px',
+  border: '1px solid #555',
+  backgroundColor: '#404040',
+  color: 'white',
+  fontSize: '15px',
+};
+
+const buttonStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #FFA726, #FF9800)',
+  color: 'white',
+  border: 'none',
+  padding: '0.75rem 1.5rem',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '15px',
 };
 
 export default ItemManagementDashboard;

@@ -32,15 +32,16 @@ const CategoryManagementDashboard: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
   const [AllCategory, setAllCategory] = useState([]);
+  const token = localStorage.getItem("authToken");
   useEffect(() => {
     const fetchData = async () => {
-
-
       try {
-
-
         const response = await fetch('http://localhost:8080/api/v1.0/categories', {
           method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
 
         if (!response.ok) {
@@ -106,9 +107,13 @@ const CategoryManagementDashboard: React.FC = () => {
       formDataToSend.append('file', file);
 
 
-      const response = await fetch('http://localhost:8080/api/v1.0/categories', {
+      const response = await fetch('http://localhost:8080/api/v1.0/admin/categories', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formDataToSend,
+
       });
 
       if (!response.ok) {
@@ -139,15 +144,15 @@ const CategoryManagementDashboard: React.FC = () => {
     // Add your search logic here
   };
 
-  async function handelDelete(id:any){
-    const response = await fetch(`http://localhost:8080/api/v1.0/categories/${id}`, {
-        method: 'DELETE',
-      });
-      window.location.reload(); 
+  async function handelDelete(id: any) {
+    const response = await fetch(`http://localhost:8080/api/v1.0/admin/categories/${id}`, {
+      method: 'DELETE',
+    });
+    window.location.reload();
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
   return (
     <div style={styles.dashboard}>
@@ -319,7 +324,7 @@ const CategoryManagementDashboard: React.FC = () => {
                       cursor: 'pointer',
                       fontSize: '14px'
                     }}
-                    onClick={()=>handelDelete(item?.categoryId)}
+                    onClick={() => handelDelete(item?.categoryId)}
                     title="Delete"
                   >
                     ✖
