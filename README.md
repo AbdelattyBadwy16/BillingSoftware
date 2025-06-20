@@ -1,6 +1,7 @@
 📌 Ideal for small shops and local businesses who need a fast and clean way to handle billing and sales.
 
 ⚙️ Main Features
+
 🔹 Category Management
 Create and manage product categories with images.
 
