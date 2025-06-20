@@ -23,10 +23,10 @@ Real-time insights into:
 🔹 User Management
 Register and manage system users (employees/admins).
 
-💻 Tech Stack
-🧠 Backend: Spring Boot
+      💻 Tech Stack
+         🧠 Backend: Spring Boot
 
-🌐 Frontend: React + TypeScript
+         🌐 Frontend: React + TypeScript
 
-💾 Database: PostgreSQL 
+         💾 Database: PostgreSQL 
 
