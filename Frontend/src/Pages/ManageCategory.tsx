@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-// TypeScript interfaces
 interface CategoryFormData {
   name: string;
   description: string;
@@ -9,6 +8,14 @@ interface CategoryFormData {
 
 interface FileWithPreview extends File {
   preview?: string;
+}
+
+interface Category {
+  categoryId: string;
+  name: string;
+  description: string;
+  bgColor: string;
+  imgUrl?: string;
 }
 
 function getContrastColor(bgColor: string) {
@@ -29,12 +36,16 @@ const CategoryManagementDashboard: React.FC = () => {
 
   const [file, setFile] = useState<FileWithPreview | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
-  const [AllCategory, setAllCategory] = useState([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  
   const token = localStorage.getItem("authToken");
+
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const response = await fetch('http://localhost:8080/api/v1.0/categories', {
           method: 'GET',
@@ -47,22 +58,29 @@ const CategoryManagementDashboard: React.FC = () => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        let data = await response.json();
-        setAllCategory(data);
-      } catch (error) {
+        const data = await response.json();
+        setCategories(data);
+        setError('');
+      } catch (error: any) {
         console.error('Error:', error);
-        alert(`Error submitting category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setError(`Error fetching categories: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
-        setIsSubmitting(false);
+        setLoading(false);
       }
     };
-    fetchData();
+    
+    if (token) {
+      fetchData();
+    } else {
+      setError("No authentication token found");
+    }
+
     return () => {
       if (file?.preview) {
         URL.revokeObjectURL(file.preview);
       }
     };
-  }, [file]);
+  }, [token]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -76,7 +94,6 @@ const CategoryManagementDashboard: React.FC = () => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0];
 
-      // Revoke previous file URL if exists
       if (file?.preview) {
         URL.revokeObjectURL(file.preview);
       }
@@ -89,23 +106,28 @@ const CategoryManagementDashboard: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      alert('Please enter a category name');
+      setError('Please enter a category name');
       return;
     }
 
     if (!file) {
-      alert('Please select an image file');
+      setError('Please select an image file');
       return;
     }
 
-    setIsSubmitting(true);
-    setSubmitSuccess(false);
+    if (!token) {
+      setError("No authentication token found");
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
 
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('category', JSON.stringify(formData));
       formDataToSend.append('file', file);
-
 
       const response = await fetch('http://localhost:8080/api/v1.0/admin/categories', {
         method: 'POST',
@@ -113,7 +135,6 @@ const CategoryManagementDashboard: React.FC = () => {
           'Authorization': `Bearer ${token}`,
         },
         body: formDataToSend,
-
       });
 
       if (!response.ok) {
@@ -122,7 +143,21 @@ const CategoryManagementDashboard: React.FC = () => {
 
       const result = await response.json();
       console.log('Success:', result);
-      setSubmitSuccess(true);
+      setSuccess('Category created successfully!');
+      
+      // Refresh the categories list
+      const refreshResponse = await fetch('http://localhost:8080/api/v1.0/categories', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        setCategories(data);
+      }
 
       setFormData({
         name: '',
@@ -130,637 +165,597 @@ const CategoryManagementDashboard: React.FC = () => {
         bgColor: '#000000'
       });
       setFile(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
-      alert(`Error submitting category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(`Error submitting category: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Search term:', searchTerm);
-    // Add your search logic here
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (!token) {
+      setError("No authentication token found");
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this category?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1.0/admin/categories/${categoryId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      setSuccess('Category deleted successfully!');
+      // Refresh the categories list
+      const refreshResponse = await fetch('http://localhost:8080/api/v1.0/categories', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        setCategories(data);
+      }
+    } catch (error: any) {
+      console.error('Error deleting category:', error.message);
+      setError("Failed to delete category: " + error.message);
+    }
   };
 
-  async function handelDelete(id: any) {
-    const response = await fetch(`http://localhost:8080/api/v1.0/admin/categories/${id}`, {
-      method: 'DELETE',
-    });
-    window.location.reload();
+  const filteredCategories = categories.filter((category: Category) => 
+    category.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    category.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-  }
   return (
-    <div style={styles.dashboard}>
-
-
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#ffffff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      
       {/* Main Content */}
-      <div style={styles.mainContent}>
-        <div style={styles.contentContainer}>
-          {/* Form Section */}
-          <div style={styles.formSection}>
-            <div style={styles.formCard}>
-              <div style={styles.formHeader}>
-                <label htmlFor="file-upload" style={styles.uploadIcon}>
-                  {file?.preview ? (
-                    <img
-                      src={file.preview}
-                      alt="Preview"
-                      style={styles.uploadPreview}
-                    />
-                  ) : (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 16L12 8M12 8L9 11M12 8L15 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </label>
-                <input
-                  id="file-upload"
-                  type="file"
-                  onChange={handleFileChange}
-                  style={styles.fileInput}
-                  accept="image/*"
-                />
-                {file && (
-                  <div style={styles.fileInfo}>
-                    <span style={styles.fileName}>{file.name}</span>
-                    <button
-                      onClick={() => setFile(null)}
-                      style={styles.removeFileButton}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
+      <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+        {(error || success) && (
+          <div style={{
+            backgroundColor: error ? '#f8d7da' : '#d4edda',
+            color: error ? '#721c24' : '#155724',
+            padding: '1rem',
+            borderRadius: '8px',
+            marginBottom: '2rem',
+            border: `1px solid ${error ? '#f5c6cb' : '#c3e6cb'}`
+          }}>
+            {error || success}
+          </div>
+        )}
 
-              <div style={styles.itemForm}>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Name *</label>
+        <div style={{
+          display: 'flex',
+          gap: '3rem',
+          alignItems: 'flex-start'
+        }}>
+          {/* Form Section */}
+          <div style={{
+            flex: '1',
+            maxWidth: '500px'
+          }}>
+            <div style={{
+              backgroundColor: '#ffffff',
+              padding: '2.5rem',
+              borderRadius: '16px',
+              border: '1px solid #e9ecef',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+            }}>
+              <h2 style={{
+                color: '#212529',
+                marginBottom: '2rem',
+                fontSize: '24px',
+                fontWeight: '700',
+                textAlign: 'center'
+              }}>
+                Add New Category
+              </h2>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: '#495057',
+                    fontWeight: '600',
+                    marginBottom: '0.5rem',
+                    fontSize: '16px'
+                  }}>
+                    Category Image
+                  </label>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '1rem'
+                  }}>
+                    <label htmlFor="file-upload" style={{
+                      width: '120px',
+                      height: '120px',
+                      borderRadius: '8px',
+                      border: '2px dashed #e9ecef',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      overflow: 'hidden'
+                    }}>
+                      {file?.preview ? (
+                        <img
+                          src={file.preview}
+                          alt="Preview"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          padding: '1rem',
+                          textAlign: 'center'
+                        }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16L12 8M12 8L9 11M12 8L15 11" stroke="#6c757d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="#6c757d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span style={{ fontSize: '14px', color: '#6c757d', marginTop: '8px' }}>
+                            Upload Image
+                          </span>
+                        </div>
+                      )}
+                    </label>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      onChange={handleFileChange}
+                      style={{ display: 'none' }}
+                      accept="image/*"
+                    />
+                    {file && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <span style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          maxWidth: '200px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {file.name}
+                        </span>
+                        <button
+                          onClick={() => setFile(null)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#dc3545',
+                            cursor: 'pointer',
+                            fontSize: '16px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: '#495057',
+                    fontWeight: '600',
+                    marginBottom: '0.5rem',
+                    fontSize: '16px'
+                  }}>
+                    Name *
+                  </label>
                   <input
                     type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="Category Name"
-                    style={styles.formInput}
+                    style={{
+                      width: '100%',
+                      padding: '16px 20px',
+                      backgroundColor: '#ffffff',
+                      border: '2px solid #e9ecef',
+                      borderRadius: '10px',
+                      color: '#212529',
+                      fontSize: '16px',
+                      transition: 'border-color 0.3s ease'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                    onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
                     required
                   />
                 </div>
 
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Description</label>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: '#495057',
+                    fontWeight: '600',
+                    marginBottom: '0.5rem',
+                    fontSize: '16px'
+                  }}>
+                    Description
+                  </label>
                   <textarea
                     name="description"
                     value={formData.description}
                     onChange={handleInputChange}
-                    placeholder="Write content here.."
+                    placeholder="Write description here..."
                     rows={6}
-                    style={styles.formTextarea}
+                    style={{
+                      width: '100%',
+                      padding: '16px 20px',
+                      backgroundColor: '#ffffff',
+                      border: '2px solid #e9ecef',
+                      borderRadius: '10px',
+                      color: '#212529',
+                      fontSize: '16px',
+                      resize: 'vertical',
+                      transition: 'border-color 0.3s ease'
+                    }}
+                    onFocus={(e) => (e.target as HTMLTextAreaElement).style.borderColor = '#007bff'}
+                    onBlur={(e) => (e.target as HTMLTextAreaElement).style.borderColor = '#e9ecef'}
                   />
                 </div>
 
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Background color</label>
-                  <div style={styles.colorPickerContainer}>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: '#495057',
+                    fontWeight: '600',
+                    marginBottom: '0.5rem',
+                    fontSize: '16px'
+                  }}>
+                    Background Color
+                  </label>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem'
+                  }}>
+                    <input
+                      type="color"
+                      name="bgColor"
+                      value={formData.bgColor}
+                      onChange={handleInputChange}
+                      style={{
+                        width: '50px',
+                        height: '40px',
+                        padding: 0,
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    />
                     <input
                       type="text"
                       name="bgColor"
                       value={formData.bgColor}
                       onChange={handleInputChange}
+                      style={{
+                        flex: 1,
+                        padding: '16px 20px',
+                        backgroundColor: '#ffffff',
+                        border: '2px solid #e9ecef',
+                        borderRadius: '10px',
+                        color: '#212529',
+                        fontSize: '16px',
+                        transition: 'border-color 0.3s ease'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                      onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
                     />
                     <div
                       style={{
-                        ...styles.colorPreview,
-                        backgroundColor: formData.bgColor
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        backgroundColor: formData.bgColor,
+                        border: '2px solid #e9ecef'
                       }}
                     ></div>
-                    <span style={styles.colorValue}>{formData.bgColor}</span>
                   </div>
                 </div>
 
-                <div style={styles.formActions}>
-                  <button
-                    onClick={handleSubmit}
-                    style={styles.submitButton}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <span style={styles.buttonLoader}></span>
-                    ) : (
-                      'Submit'
-                    )}
-                  </button>
-                  {submitSuccess && (
-                    <div style={styles.successMessage}>
-                      Category submitted successfully!
-                    </div>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    backgroundColor: loading ? '#6c757d' : '#007bff',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    fontSize: '18px',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    transition: 'background-color 0.3s ease',
+                    marginTop: '1rem'
+                  }}
+                  onMouseOver={(e: any) => {
+                    if (!loading) e.target.style.backgroundColor = '#0056b3';
+                  }}
+                  onMouseOut={(e: any) => {
+                    if (!loading) e.target.style.backgroundColor = '#007bff';
+                  }}
+                >
+                  {loading ? 'Saving...' : 'Save Category'}
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Search Section */}
-          <div style={styles.searchSection}>
-            <form onSubmit={handleSearch} style={styles.searchForm}>
-              <div style={styles.searchContainer}>
+          {/* Categories List Section */}
+          <div style={{
+            flex: '1',
+            maxWidth: '600px'
+          }}>
+            {/* Search Section */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              padding: '2rem',
+              borderRadius: '16px',
+              border: '1px solid #e9ecef',
+              marginBottom: '2rem',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+            }}>
+              <h3 style={{
+                color: '#212529',
+                marginBottom: '1.5rem',
+                fontSize: '20px',
+                fontWeight: '600',
+                textAlign: 'center'
+              }}>
+                Search Categories
+              </h3>
+              
+              <div style={{
+                position: 'relative',
+                maxWidth: '400px',
+                margin: '0 auto'
+              }}>
                 <input
                   type="text"
+                  placeholder="Search by name or description"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by keyword"
-                  style={styles.searchInput}
+                  style={{
+                    width: '100%',
+                    padding: '16px 50px 16px 20px',
+                    backgroundColor: '#f8f9fa',
+                    border: '2px solid #e9ecef',
+                    borderRadius: '25px',
+                    color: '#212529',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'border-color 0.3s ease'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                  onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
                 />
-                <button type="submit" style={styles.searchButton}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M21 21L16.514 16.506M19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <button style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  backgroundColor: '#007bff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '35px',
+                  height: '35px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#ffffff'
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M21 21L16.514 16.506M19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </button>
               </div>
-            </form>
-
-            <div style={styles.toggleContainer}>
-              {AllCategory.map((item: any) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'inline-block',
-                    margin: '0 10px',
-                    padding: '10px 15px',
-                    borderRadius: '20px',
-                    backgroundColor: item?.bgColor || '#f5f5f5',
-                    color: getContrastColor(item?.bgColor || '#f5f5f5'),
-                    whiteSpace: 'nowrap',
-                    position: 'relative',
-                  }}
-                >
-                  {item?.imgUrl && (
-                    <img
-                      src={item.imgUrl}
-                      alt={item.name}
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        verticalAlign: 'middle',
-                        marginRight: '8px'
-                      }}
-                    />
-                  )}
-                  <span>{item?.name}</span>
-
-                  {/* زرار الحذف */}
-                  <button
-                    style={{
-                      marginLeft: '10px',
-                      background: 'transparent',
-                      border: 'none',
-                      color: getContrastColor(item?.bgColor || '#f5f5f5'),
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
-                    onClick={() => handelDelete(item?.categoryId)}
-                    title="Delete"
-                  >
-                    ✖
-                  </button>
-                </div>
-              ))}
             </div>
 
+            {/* Categories List */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid #e9ecef',
+              overflow: 'hidden',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+            }}>
+              <div style={{
+                padding: '1.5rem',
+                backgroundColor: '#f8f9fa',
+                borderBottom: '1px solid #e9ecef'
+              }}>
+                <h3 style={{
+                  color: '#212529',
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  textAlign: 'center'
+                }}>
+                  Categories List ({filteredCategories.length})
+                </h3>
+              </div>
 
-
-
+              <div style={{
+                maxHeight: '400px',
+                overflowY: 'auto'
+              }}>
+                {loading ? (
+                  <div style={{
+                    padding: '3rem',
+                    textAlign: 'center',
+                    color: '#6c757d'
+                  }}>
+                    Loading categories...
+                  </div>
+                ) : filteredCategories.length === 0 ? (
+                  <div style={{
+                    padding: '3rem',
+                    textAlign: 'center',
+                    color: '#6c757d'
+                  }}>
+                    No categories found matching your search
+                  </div>
+                ) : (
+                  filteredCategories.map((category: Category, index: number) => (
+                    <div
+                      key={category.categoryId}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '1.5rem 2rem',
+                        borderBottom: index === filteredCategories.length - 1 ? 'none' : '1px solid #f1f3f4',
+                        transition: 'background-color 0.3s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        flex: 1
+                      }}>
+                        {category.imgUrl && (
+                          <img
+                            src={category.imgUrl}
+                            alt={category.name}
+                            style={{
+                              width: '50px',
+                              height: '50px',
+                              borderRadius: '8px',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        )}
+                        <div>
+                          <div style={{
+                            color: '#212529',
+                            fontWeight: '600',
+                            fontSize: '18px',
+                            marginBottom: '4px'
+                          }}>
+                            {category.name || 'Unknown Category'}
+                          </div>
+                          <div style={{
+                            color: '#6c757d',
+                            fontSize: '15px'
+                          }}>
+                            {category.description || 'No description provided'}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <div
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: '20px',
+                            backgroundColor: category.bgColor,
+                            color: getContrastColor(category.bgColor),
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          {category.bgColor}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteCategory(category.categoryId)}
+                          style={{
+                            backgroundColor: '#dc3545',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '10px',
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'background-color 0.3s ease',
+                            minWidth: '40px',
+                            minHeight: '40px'
+                          }}
+                          onMouseOver={(e: any) => e.target.style.backgroundColor = '#c82333'}
+                          onMouseOut={(e: any) => e.target.style.backgroundColor = '#dc3545'}
+                          title="Delete Category"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path
+                              d="M3 6H5H21"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-// Styles object
-const styles: { [key: string]: React.CSSProperties } = {
-  dashboard: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif',
-    backgroundColor: '#1a1a1a',
-    color: '#ffffff',
-    lineHeight: '1.5',
-  },
-
-  navbar: {
-    backgroundColor: '#2d2d2d',
-    padding: '0 2rem',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: '64px',
-    borderBottom: '1px solid #404040',
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-  },
-
-  navBrand: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-
-  logo: {
-    width: '36px',
-    height: '36px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  logoIcon: {
-    width: '24px',
-    height: '24px',
-    background: 'linear-gradient(135deg, #4CAF50, #8BC34A)',
-    borderRadius: '6px',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-  },
-
-  brandName: {
-    fontWeight: '600',
-    fontSize: '18px',
-    color: '#ffffff',
-  },
-
-  navLinks: {
-    display: 'flex',
-    gap: '2rem',
-    alignItems: 'center',
-  },
-
-  navLink: {
-    textDecoration: 'none',
-    color: '#b0b0b0',
-    fontSize: '14px',
-    fontWeight: '500',
-    padding: '0.5rem 0',
-    transition: 'color 0.3s ease',
-  },
-
-  activeLink: {
-    color: '#FFA726',
-    fontWeight: '600',
-    borderBottom: '2px solid #FFA726',
-  },
-
-  navProfile: {
-    display: 'flex',
-    alignItems: 'center',
-  },
-
-  profileAvatar: {
-    width: '36px',
-    height: '36px',
-    background: 'linear-gradient(135deg, #6B73FF, #9575CD)',
-    borderRadius: '50%',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: '14px',
-  },
-
-  mainContent: {
-    flex: 1,
-    padding: '2rem',
-    backgroundColor: '#1a1a1a',
-  },
-
-  contentContainer: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 300px',
-    gap: '2rem',
-    maxWidth: '1400px',
-    margin: '0 auto',
-  },
-
-  formSection: {
-    width: '100%',
-  },
-
-  formCard: {
-    backgroundColor: '#2d2d2d',
-    borderRadius: '12px',
-    padding: '2rem',
-    border: '1px solid #404040',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-  },
-
-  formHeader: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    marginBottom: '2rem',
-    gap: '12px',
-  },
-
-  uploadIcon: {
-    width: '80px',
-    height: '80px',
-    background: 'linear-gradient(135deg, #4CAF50, #8BC34A)',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'white',
-    cursor: 'pointer',
-    transition: 'transform 0.3s ease',
-    overflow: 'hidden',
-  },
-
-  uploadPreview: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-
-  fileInput: {
-    display: 'none',
-  },
-
-  fileInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '14px',
-    color: '#e0e0e0',
-  },
-
-  fileName: {
-    maxWidth: '200px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-
-  removeFileButton: {
-    background: 'transparent',
-    border: 'none',
-    color: '#ff6b6b',
-    cursor: 'pointer',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    padding: '0 4px',
-  },
-
-  itemForm: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.5rem',
-  },
-
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-  },
-
-  formLabel: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#ffffff',
-  },
-
-  formInput: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
-    outline: 'none',
-  },
-
-  formTextarea: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    resize: 'vertical',
-    minHeight: '120px',
-    outline: 'none',
-  },
-
-  colorPickerContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-
-  colorPicker: {
-    opacity: 0,
-    position: 'absolute',
-    width: '50px',
-    height: '40px',
-    cursor: 'pointer',
-  },
-
-  colorPreview: {
-    width: '50px',
-    height: '40px',
-    borderRadius: '8px',
-    border: '2px solid #555555',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    position: 'relative',
-
-  },
-
-  colorValue: {
-    fontSize: '14px',
-    color: '#b0b0b0',
-  },
-
-  formActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-    marginTop: '1rem',
-  },
-
-  submitButton: {
-    background: 'linear-gradient(135deg, #FFA726, #FF9800)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '0.875rem 2rem',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: '120px',
-
-  },
-
-  buttonLoader: {
-    display: 'inline-block',
-    width: '16px',
-    height: '16px',
-    border: '2px solid rgba(255, 255, 255, 0.3)',
-    borderRadius: '50%',
-    borderTopColor: '#ffffff',
-    animation: 'spin 1s ease-in-out infinite',
-  },
-
-  successMessage: {
-    color: '#4CAF50',
-    fontSize: '14px',
-    fontWeight: '500',
-  },
-
-  searchSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2rem',
-  },
-
-  searchForm: {
-    width: '100%',
-  },
-
-  searchContainer: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-
-  searchInput: {
-    backgroundColor: '#404040',
-    border: '1px solid #555555',
-    borderRadius: '8px',
-    padding: '0.75rem 3rem 0.75rem 1rem',
-    color: '#ffffff',
-    fontSize: '14px',
-    width: '100%',
-    outline: 'none',
-
-  },
-
-  searchButton: {
-    position: 'absolute',
-    right: '8px',
-    background: 'linear-gradient(135deg, #FFA726, #FF9800)',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '0.5rem',
-    color: 'white',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.3s ease',
-
-  },
-
-  toggleContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-    backgroundColor: '#2d2d2d',
-    borderRadius: '8px',
-    padding: '1rem',
-    border: '1px solid #404040',
-  },
-
-  toggleLabelText: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#ffffff',
-  },
-
-  toggleSwitch: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-
-  toggleInput: {
-    opacity: 0,
-    width: 0,
-    height: 0,
-  },
-
-  toggleLabel: {
-    position: 'relative',
-    cursor: 'pointer',
-    width: '60px',
-    height: '34px',
-    borderRadius: '34px',
-    transition: '0.4s',
-  },
-
-  toggleSlider: {
-    position: 'absolute',
-    height: '26px',
-    width: '26px',
-    left: '4px',
-    bottom: '4px',
-    backgroundColor: 'white',
-    borderRadius: '50%',
-    transition: '0.4s',
-  },
-
-  statsCard: {
-    backgroundColor: '#2d2d2d',
-    borderRadius: '8px',
-    padding: '1.5rem',
-    border: '1px solid #404040',
-  },
-
-  statsTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: '1rem',
-  },
-
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '1rem',
-  },
-
-  statItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  statValue: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#FFA726',
-  },
-
-  statLabel: {
-    fontSize: '12px',
-    color: '#b0b0b0',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
 };
 
 export default CategoryManagementDashboard;

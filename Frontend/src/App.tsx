@@ -10,6 +10,7 @@ import Explore from './Pages/Explore'
 import ItemManagementDashboard from './Pages/ManageItem'
 import CategoryManagementDashboard from './Pages/ManageCategory'
 import UserManagement from './Pages/UserManage'
+import OrderHistory from './Pages/OrderHistory'
 
 function App() {
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/Explore" element={<Explore></Explore>}></Route>
           <Route path="/ManageItem" element={<ItemManagementDashboard></ItemManagementDashboard>}></Route>
           <Route path="/UserManage" element={<UserManagement></UserManagement>}></Route>
+          <Route path="/OrderHistory" element={<OrderHistory></OrderHistory>}></Route>
         </Route>
       </Routes>
     </BrowserRouter>
