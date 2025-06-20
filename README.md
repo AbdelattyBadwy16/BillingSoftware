@@ -24,6 +24,7 @@ Real-time insights into:
 Register and manage system users (employees/admins).
 
       💻 Tech Stack
+      
          🧠 Backend: Spring Boot
 
          🌐 Frontend: React + TypeScript
