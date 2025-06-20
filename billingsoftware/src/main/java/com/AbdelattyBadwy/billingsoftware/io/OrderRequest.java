@@ -13,19 +13,17 @@ import java.util.List;
 @NoArgsConstructor
 @Builder
 public class OrderRequest  {
-    private String orderId;
     private String customerName;
     private String phoneNumber;
+    private List<OrderItemRequest> cartItems;
     private Double subTotal;
     private Double tax;
     private Double grandTotal;
-    private LocalDateTime createdAt;
-    private List<OrderResponse.OrderItemRequest> items;
     private PaymentMethod paymentMehthod;
-    private PaymentDetails paymentDetails;
 
     @Data
     @Builder
+    @AllArgsConstructor
     @NoArgsConstructor
     public static class OrderItemRequest{
         private String itemId;
