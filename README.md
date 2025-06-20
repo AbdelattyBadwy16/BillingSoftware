@@ -14,11 +14,11 @@ Create customer orders and track latest invoices.
 🔹 Dashboard
 Real-time insights into:
 
-✅ Today’s sales
+        ✅ Today’s sales
 
-📦 Number of orders
+        📦 Number of orders
 
-👥 Total customers
+        👥 Total customers
 
 🔹 User Management
 Register and manage system users (employees/admins).
